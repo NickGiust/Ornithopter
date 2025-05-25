@@ -1,0 +1,113 @@
+% Ornithopter Performance Script
+clc;clear;close all;
+%% Set Requirements/Variables and constants
+
+%Starting Speed
+V0 = 0; %m/s
+%Estimated Mass
+m = 1.2; %[kg]
+%Cruise Speed
+Vc = 5; %[m/s]
+%wing flap rate (frequency)
+f = 16; %[1/s]
+
+
+%Wing Span
+b = 1.5; % [m]
+%Inboard/Total Wing Ratio
+RIW = 0.5; %[-]
+%Aspect Ratio
+AR = 8; %[-]
+%Wing neutral angle
+AngW0 = 45; %[deg]
+%Wing Lower Angle (With respect to aircraft)
+AngW180 = -10; %[deg]
+
+%Airfoil
+airfoil = "E625";
+%Airfoil AoA relative to aircraft
+AoA = 0; %[deg]
+%Airfoil Ratio of Rib (2d airfoil length/ rib length)
+Rar = 0.4;
+%Drag Coefficient from flapping
+cDf = 1.98; %Taken from airfoil cd at 90 deg [-]
+
+%Motor Gear Size
+Gearm = 6; %Motor gear size (Shaft size) [mm]
+Gearmw = 72; %Wing gear/ motor gear ratio
+
+
+%GravitationaL Constant
+g = 9.81; %[m/s^2]
+%Air Density
+rho = 1.2; %[kg/m^3]
+
+
+%% Thrust/Lift Calculator
+%Current: Simplified thrust model -> 1/2 cycle = lift, 1/2 = drag + normal
+%Basic Calculations
+S = b^2*AR; %Wing Area [m^2]
+c = b/AR; %Wing chord [m]
+cL = 1.2; %Coefficient of lift - reference lookup table in later iterations [-]
+W = m*g; %Weight of aircraft [N]
+AngWR = AngW0 - AngW180; %Total wing movement range [deg]
+AngC = AngW180 + AngWR/2; %Average wing dihedral angle [deg]
+
+
+% Downstroke
+%Thought process is that lift from under wing from "Parachute" drag and
+%from lower pressure on top side of wing - With aero effects taken into
+%account. All values are divided by 2 to account fore this only being 1/2
+%the cycle
+
+%Get CL of top of airfoil (Scrape top of airfoil cP data from xflr5)
+airfoilcp = readmatrix("E625_0aoa_top.txt"); %Automate getting cp data and removing bottom side data
+cL = -trapz(airfoilcp(:, 1),airfoilcp(:, 3) ); %cL = cP integrated along length
+%Lift from top of wing airfoil
+L = 0.5*cL*rho*S*Vc^2;
+
+%'Parachute drag' lift force (1/2 for 0.5 cycle - check notes)
+FdL = cDf*rho*c* ((1/3)*(AngWR/90)^2*pi^2*f^2*(b/2)^3);
+%Sum of forces in 
+Fd = 0.5* (FdL - W);
+
+
+
+
+
+% Upstroke
+%This model assumes the aircraft still produces lift from airfoil as
+%calculated above but now has 2 downwards forces, from gravity and wing
+%moving upwards. Will probably change to average wind vectors in future.
+
+%Downwards force from drag on upstroke
+Fud = -cDf*rho*c* ((1/3)*(AngWR/90)^2*pi^2*f^2*(b/4)^3); % [N]
+%Sum of forces/2 for being half of cycle (Weight and drag of 1/2 of wing)
+Fu = 0.5*(Fud - W); % [N]
+
+
+
+% Normal velocity lift
+%Average lift force from (does not account for aeroelestic effects)
+%Downstroke
+LnormD = cos(AngC) * (0.5*rho*S*cL*Vc^2); %average lift force on downstroke from cruise air[N]
+%Upstroke
+%Below calculation assumes wing area to be proportional to span, which is
+%overestimates wing tip lift
+LnormU = cos(AngC)*(RIW *0.5*rho*S*cL*Vc^2) +  0;%Average lift ASSUME OUTBOARD WING HAS NO LIFT RN
+%Total average lift
+Lnorm = mean([LnormU, LnormD]); %Average lift from free stream air at cruise
+
+
+%% Geometry Calculator
+RPMm = 500;%Motor RPM
+RPMw = RPMm/Gearmw;%Wing RPM after gear reduction
+SparI = b/2*RIW; %Inboard Spar length [m]
+% ASSUME GEAR RIGHT UNDER BAR - Later Account for gear change in x/z
+% placement
+Geardx = Gearm*Gearmw; %Wing Gear diameter (how far wing gear moves up-down [mm]
+GtoSx = Geardx/sind(AngWR); %Distance from hinge on wing to get necesssary range
+
+
+
+

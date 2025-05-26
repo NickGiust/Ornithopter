@@ -1,0 +1,6 @@
+Environment parameters
+=======================================================================
+Density [kg/m^3]:		1.15
+Wind speed [m/s]:		5
+Wind direction [deg]:		210
+Takeoff direction [deg]:	190

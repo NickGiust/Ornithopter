@@ -1,0 +1,15 @@
+%% PLANETOOLS 2022 VS PLANETOOLS
+% Simplified new dynamic thrust model
+% ODE solvers rather than for loops for flight condition convergence
+% Battery decay model
+% Motor thermal model
+% Fuselage/wing propwash drag model
+% Full course simulation
+% Much simpler code
+% About 100x as fast (1 sec vs 60 seconds), further sped up by
+% parallelization in for loops for trade studies
+% Simplified with MATLAB struct objects rather than custom objects
+% No units - all SI base units
+% No in-process unit conversions
+% Greatly simplified code base (~600 lines vs. ~50,000-100,000 lines)
+% Soon: thorough project documentation + potential integration with CAD/CFD

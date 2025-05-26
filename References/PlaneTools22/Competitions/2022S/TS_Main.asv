@@ -1,0 +1,33 @@
+clc; clear; close all;
+
+%% Inputs
+currentDirectory = split(pwd, 'PlaneTools22');
+planeToolsDirectory = [currentDirectory{1} '\PlaneTools22'];
+airplane = 'Prototype1TF2';
+year = '2022S';
+
+%% Read aircraft from text file
+plane = ReadPlane(airplane, year, planeToolsDirectory);
+
+%% Trade Study
+
+
+chordArray = (plane.c*0.8):0.02:(plane.c*1.2); % chord TS
+payloadArray = (plane.mPayload2*1):0.5:(plane.mPayload2*5); % payload TS
+scoreArray = [];
+
+
+figure
+for i = 1:length(chordArray)
+    for j = 1:length(payloadArray)
+        plane.c = chordArray(i);
+        plane.mPayload2 = payloadArray(j);
+        results = TS_SimulateCompetition(plane);
+        plot3(plane.c,plane.mPayload2,results.halfLoadedLaps,'-o')
+        hold on
+    end
+end
+
+xlabel("chord [m]")
+ylabel("payload [kg]")
+zlabel("score")

@@ -1,0 +1,50 @@
+Code:
+Me:
+Wire resistance
+Fix wind effects on straightaways/turns!!
+
+Aaron:
+Scoring
+Trade studies
+Refine weight and drag buildup
+Import airfoils, motors, batteries
+
+Me later:
+Heat effects on motor resistance (ThrustModel)
+Propwash drag on fuselage and wings (FlightModel)
+Drag & weight breakdown (PlaneTools)
+
+Rubber FlightModel (computationally light, rubber components, large tradestudies):
+1 takeoff, 1 cruise, 1 turn for each of the two missions with rubber Kv, resistance function of Kv, and prop
+Use fastest MATLAB ode solver
+Generalize to score missions
+Parallelize and run vast trade studies
+
+Research/model for Plastic:
+hA measurement for motor, then add heat effects (ThrustModel)
+ESC and battery resistance measurement (planefiles / battery objects)
+
+
+Document:
+Overall hierarchy/structure
+Scripts, methodology, equations, sources
+Variable naming and unit conventions
+Debugging tips
+GitHub & versioning
+Places to improve
+Contact info
+
+Verification of CD0 methods:
+StarSCream buildup w/o propwash - CFD, car drag testing on Expo
+Summer plane buildup PT w/ propwash - CFD w/ propwash, net thrust w/propwash, and performance data, 
+Same w/ ExSCalibur/SCkyfall
+
+- Rubber very large trade studies (gets rough geom, payloads & propulsion) >
+- Plastic with fixed propulsion components (fixed propulsion, gets better geom, payloads & propulsion) >
+- Steel with flexible CD0 and aircraft m (tells us relative benefits of reducing weight and drag)
+- CFD CD0 & CAD aircraft m (tells us where/how drag & mass can be reduced)
+
+LOOP:
+- Build, test fly and compare to Steel w/ final mass (assuming prop. model is accurate, tells us real CD0 & therefore scale factor w/ CFD)
+- Make design changes in CAD and evaluate results in Steel w/ scaled CFD-based CD0 (tells us where/how drag & mass can be reduced)
+- Rerun Plastic adjusting only payloads and propulsion to refine

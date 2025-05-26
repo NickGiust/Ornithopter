@@ -1,0 +1,195 @@
+function missionResults = SimulateMission(plane, environment, mission, TOFLLimit, TOthrottleConvergence)
+
+showVariables = false; % WARNING: only make true if testing ONE (1, uno, <2) plane! You have to press a key every lap to make it run (to give the user time to read the results)
+showGraph = false; %WARNING: only make true if testing ONE (1, uno, <2) plane! You have to press a key every plane to make it run (to give the user time to read the results)
+
+%% Mission parameters
+missionNo = mission.missionNo;
+lapLimit = mission.lapLimit;
+timeLimit = mission.timeLimit;
+climbThrottle = mission.climbThrottle;
+crzThrottle = mission.crzThrottle;
+turnThrottle = mission.turnThrottle;
+climbCL = mission.climbCL;
+turnCL = mission.turnCL;
+
+segment.coursePoints.segments = [];
+segment.coursePoints.startTimes = [];
+nLaps = 0;
+segment.performance = [];
+missionPoints.lapNos = 1;
+missionPoints.lapStartTimes = 0;
+timeAtLapEnd = 0;
+decelDistance = 0;
+warning('off','all');
+
+%% THE MISSION
+% Takeoff
+
+if TOthrottleConvergence
+    TOthrottleList = 0.7:0.1:1;
+else
+    TOthrottleList = 1;
+end
+for i = 1:length(TOthrottleList) % start from minimum throttle, only loop until takeoff is met
+    TOthrottle = TOthrottleList(i);
+    segment = FlightModel(plane,environment,missionNo,TOthrottle,0,'takeoff',0,0,segment.coursePoints,segment.performance);
+    TOFL = segment.TOFL;
+    VTO = segment.VTO;
+    Vstall = segment.Vstall;
+    missionResults.TOFL = TOFL;
+    missionResults.VTO = VTO;
+    missionResults.Vstall = Vstall;
+    
+    if TOFL >= 0 && TOFL < TOFLLimit
+        missionResults.TOFLbool = "PASSED";
+        minTOthrottle = TOthrottleList(i);
+        break
+    else
+        segment.coursePoints.segments = [];
+        segment.coursePoints.startTimes = [];
+        segment.performance = [];
+    end
+
+end
+
+if TOFL > TOFLLimit || TOFL <= 0 % if the last TOFL isn't met (using throttle of 1 or max in TOthrottleList), set scores to 0
+    missionResults.TOFLbool = "FAILED";
+    missionResults.score = 0;
+    missionResults.missionNo = missionNo;
+    missionResults.nLaps = 0;
+    missionResults.missionTime = 0;
+    missionResults.minTOthrottle = 1.1;
+    return
+end
+
+% Climb
+segment = FlightModel(plane,environment,missionNo,climbThrottle,climbCL,'climb',0,0,segment.coursePoints,segment.performance);
+
+usableBatteryFraction = 0.85; % Must be 0-0.99
+
+% Initializing variables in case the plane fails during climb
+timeAtLastLapEnd = 0; % initializing "previous lap end time" as 0 seconds
+batteryChargeAtLapStart = 1; % initializing "previous battery charge" as full (1)
+
+%% Cruise loop
+while nLaps < lapLimit && timeAtLapEnd < timeLimit && segment.performance.s(end) > (1-usableBatteryFraction) && ~segment.performance.stall(end)
+    %  under lap limit &       under time limit    &             enought battery remaining
+    
+    batteryChargeAtLapStart = segment.performance.s(end);
+
+    missionPoints.lapNos = [missionPoints.lapNos; nLaps+1];
+    missionPoints.lapStartTimes = [missionPoints.lapStartTimes; segment.performance.t(end)];
+
+    % Half straight upwind
+    segment = FlightModel(plane,environment,missionNo,crzThrottle,0,'halfStraightaway',1, ...
+        segment.additionalDistance,segment.coursePoints,segment.performance);
+  
+    % 180
+    segment = FlightModel(plane,environment,missionNo,turnThrottle,turnCL,'turn180',0,0,segment.coursePoints,segment.performance);
+
+    % Half straight downwind
+    segment = FlightModel(plane,environment,missionNo,crzThrottle,0,'halfStraightaway',0, ...
+        segment.additionalDistance,segment.coursePoints,segment.performance);
+
+    % 360
+    segment = FlightModel(plane,environment,missionNo,turnThrottle,turnCL,'turn360',0,0,segment.coursePoints,segment.performance);
+
+    % Half straight downwind
+    segment = FlightModel(plane,environment,missionNo,crzThrottle,0,'halfStraightaway',0, ...
+        segment.additionalDistance - min([0 153+decelDistance]),segment.coursePoints,segment.performance);
+
+    % 180
+    segment = FlightModel(plane,environment,missionNo,turnThrottle,turnCL,'turn180',0,0,segment.coursePoints,segment.performance);
+
+    % Half straight upwind
+    segment = FlightModel(plane,environment,missionNo,crzThrottle,0,'halfStraightaway',1, ...
+        segment.additionalDistance + decelDistance,segment.coursePoints,segment.performance);
+
+    timeAtLastLapEnd = timeAtLapEnd;
+    timeAtLapEnd = segment.performance.t(end);
+    nLaps = nLaps + 1;
+
+    if showVariables && (missionNo == 2)
+        fprintf('\nLap------------------%.0f\n', nLaps)
+        fprintf('Time-----------------%.1f\n', timeAtLapEnd)
+        fprintf('Lap time-------------%.1f\n', timeAtLapEnd - timeAtLastLapEnd)
+        fprintf('Velocity-------------%.1f\n', segment.performance.V(end))
+        fprintf('State of charge------%.4f\n', segment.performance.s(end))
+        fprintf('CL-------------------%.2f\n', segment.performance.CL(end))
+        fprintf('Load factor----------%.1f\n', segment.performance.loadFactor(end))
+        fprintf('Induced drag power---%.4f\n', segment.performance.Pinduced(end))
+        fprintf('Parasite drag power--%.4f\n', segment.performance.Pparasite(end))
+        fprintf('Vb-------------------%.4f\n', segment.performance.Vb(end))
+        fprintf('Thrust---------------%.2f\n', segment.performance.thrust(end))
+        fprintf('Prop speed-----------%.1f\n', segment.performance.propspeed(end))
+        fprintf('Shaft power----------%.2f\n', segment.performance.Pshaft(end))
+        fprintf('Current--------------%.3f\n', segment.performance.I(end))
+        fprintf('Aircraft power-------%.3f\n', segment.performance.Paircraft(end))
+        fprintf('Motor eff------------%.3f\n', segment.performance.etaMotor(end))
+        fprintf('Prop eff-------------%.3f\n', segment.performance.etaProp(end))
+        fprintf('Stall----------------%s\n', mat2str(segment.performance.stall(end)))
+        disp('Press any key to continue (or ctrl+break to stop)...')
+        pause;
+    end
+
+end
+
+if showGraph
+    close all
+    figure(1)
+    titleString = sprintf('Cruise Throttle: %.f%%', 100*crzThrottle);
+    title(titleString)
+    hold on
+    % plot velocity
+    plot(segment.performance.t, segment.performance.V, 'Color', '#990000', 'LineWidth', 1.5)
+    % plot stall velocity
+    plot(segment.performance.t, segment.performance.Vstall, 'LineStyle', ':', 'Color', '#FFC72C', 'LineWidth', 1.5)
+    % separate segments (with labels)
+    for i = 3:length(segment.coursePoints.startTimes)
+        if strcmpi(segment.coursePoints.segments(i), 'halfStraightaway')
+            xline(segment.coursePoints.startTimes(i), 'LineStyle', '--', 'Color', '#d3d3d3', 'Label', 'Straightaway')
+        elseif strcmpi(segment.coursePoints.segments(i), 'turn180')
+            xline(segment.coursePoints.startTimes(i), 'LineStyle', '--', 'Color', '#d3d3d3', 'Label', 'Turn')
+        elseif strcmpi(segment.coursePoints.segments(i), 'turn360')
+            xline(segment.coursePoints.startTimes(i), 'LineStyle', '--', 'Color', '#d3d3d3', 'Label', '360')
+        elseif strcmpi(segment.coursePoints.segments(i), 'takeoff')
+            xline(segment.coursePoints.startTimes(i), 'LineStyle', '--', 'Color', '#d3d3d3', 'Label', 'Takeoff')
+        elseif strcmpi(segment.coursePoints.segments(i), 'climb')
+            xline(segment.coursePoints.startTimes(i), 'LineStyle', '--', 'Color', '#d3d3d3', 'Label', 'Climb')
+        end
+    end
+
+    %formatting
+    legend('Airspeed', 'Stall Speed')
+    xlabel('Time [s]')
+    ylabel('CL [-]')
+    disp('Press any button to show next graph (or ctrl+break to stop)...')
+    pause;
+end
+
+% if last lap ends after time limit or plane stalled on last lap, don't count it
+% (while loop only checks if we're under time limit and not stalled at beginning of lap)
+if timeAtLapEnd < timeLimit & ~segment.performance.stall
+    missionTime = timeAtLapEnd;
+else
+    missionTime = timeAtLastLapEnd;
+    nLaps = nLaps - 1;
+end
+
+%% OUTPUT TO PLANETOOLS
+
+missionResults.missionNo = missionNo;
+missionResults.TOFL = TOFL;
+missionResults.minTOthrottle = minTOthrottle;
+missionResults.VTO = VTO;
+missionResults.nLaps = nLaps;
+missionResults.missionTime = missionTime;
+missionResults.missionPoints = missionPoints;
+missionResults.coursePoints = segment.coursePoints;
+missionResults.performance = segment.performance;
+missionResults.batteryUsage = 1 - batteryChargeAtLapStart;
+
+end
+
+

@@ -1,0 +1,116 @@
+%% INPUTS
+% Mission no.
+mission = 2;
+
+% No. of payloads
+n_payloads = 200;
+
+% Battery voltage [V]
+V_bat = 8*3.7;
+
+% Battery capacity [Ah]
+capacity_bat = 3.3;
+
+% Battery energy [J]
+E_bat = V_bat*capacity_bat;
+
+% Config avg. level airspeed [m/s]
+V_ref = 22;
+
+% Config avg. level cruise current [A]
+I_ref = 60;
+
+% Config static thrust [N]
+T_static = 140;
+
+% Config. ref. mass [kg]
+m_ref = 18.8;
+
+% Config. ref. approx. CD0
+CD0_ref = .05;
+
+% Wind speed [m/s]
+V_wind = 15.6;
+
+% Wind direction [deg]
+heading_wind = 101;
+
+% Runway direction [deg]
+heading_rwy = 11;
+% Empty mass [kg]
+m_empty = 13.4;
+% Wing aspect ratio
+AR = 2.44/.4;
+% Wing area
+S = 2.44*.4;
+% Wing Oswald efficiency
+e = .9;
+% Air density
+dens = 1.1;
+
+theta = deg2rad(heading_rwy - heading_wind);
+theta = pi/4;
+
+k = 1/(pi*e*AR);
+W_ref = m_ref*9.81;
+
+%% Estimated drag at ref. airspeed
+CL_ref = W_ref/(.5*dens*V_ref^2*S);
+D_ref_est = .5*dens*V_ref^2*(CD0_ref + k*CL_ref^2);
+
+%% Thrust curve slope
+m_T = (D_ref_est - T_static)/V_ref;
+
+%% Mass buildup
+if mission == 2
+    m_payload = .018;
+else
+    m_payload = .226;
+end
+m = n_payloads*m_payload + m_empty;
+W = m*9.81;
+
+%% Mass ratio
+R_m = m/m_ref;
+
+%% Airspeed at desired weight 
+V = roots([.5*dens*CD0_ref m_T -T_static 0 2*k*W^2/(dens*S)]);
+V = -min(real(V(imag(V) == 0)));
+
+%% Airspeed ratio
+R_V = V/V_ref;
+
+%% Power ratio
+P_ref = D_ref_est*V_ref;
+
+CL = W/(.5*dens*V^2*S);
+D = .5*dens*V^2*(CD0_ref + k*CL^2);
+P = D*V;
+
+R_P = P/P_ref;
+
+%% Electrical power at desired weight
+P_elec_ref = I_ref*V_bat;
+P_elec = P_elec_ref*R_P;
+
+%% Groundspeed in each direction
+V_g = ((V_wind^2) + (V.^2) - (2*V_wind*V*cos(theta))).^.5;
+
+%% Time on course each direction
+
+%% Power consumed per lap
+
+%% Factor for TO/turns
+
+%% No of laps
+
+%% OUTPUTS
+% No. of laps
+
+
+%% NO TURNS BECAUSE:
+% 1) turn data hard to isolate
+% 2) Wyatt turns at competition different than at TF
+% 3) Wyatt turns at competition difficult to model/high uncertainty
+% 4) turn time relatively minor/negligible rel. to lap time
+% 5) turn performance scales w/ straight performance??

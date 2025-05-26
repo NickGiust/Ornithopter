@@ -1,0 +1,71 @@
+Wing
+=======================================================================
+Wingspan [m] :		2.44
+Tip chord [m] :		.36
+Root chord [m] :	.36
+Max. thickness [m]:	.03
+Airfoil type:		e422
+Ground roll CL:		.3
+Winglet height [m]:	0
+Winglet weight [kg]:	0
+Wing height [m]:	.2
+Max. load factor:	15
+Material:		foamfiberglass
+
+Fuselage
+=======================================================================
+Length [m]:		2.3
+Width [m]:		.15
+Height [m]:		.41
+Material:		carbon
+
+Tail
+=======================================================================
+Horizontal span [m]:	.8	
+Height [m]:		.5	
+Mean chord [m]:		.3
+No. of verticals:	1
+Material:		foamfiberglass
+
+Propulsion
+=======================================================================
+Motor type:		Hacker_A50_10L_Turnado_V3
+Number of Motors:	2
+ESC current rating [A]:	400
+ESC resistance [Ω]:	.0005
+Wire diameter [m]:	.006
+
+Landing gear
+=======================================================================
+Type:			bow
+Material:		carbon
+Rolling resistance:	.03
+
+Mission 2
+=======================================================================
+- Propeller
+Propeller:		ancf_15x10
+
+- Battery
+Battery:		HRB_LiPo_3300
+No. in series:		8
+No. in parallel:	1
+
+- Payload	
+Mass [kg]:		.018
+Drag area [m^2]:	0
+No. of payloads:	600
+
+Mission 3
+=======================================================================
+Propeller:		apce_11x7
+
+- Battery
+Battery:		Thunder_LiPo_4400
+No. in series:		6
+No. in parallel:	1
+
+- Payload	
+Mass [kg]:		.226
+Drag area [m^2]:	0
+No. of payloads:	8

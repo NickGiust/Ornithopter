@@ -1,0 +1,701 @@
+function segmentResults = PropulsionModel(plane, environment, missionNo, throttle, CL, courseSegment, ...
+    upwind, additionalDist, pointsElapsed, performanceElapsed)
+
+% only make constants that aren't calculated into global variables
+global u v w z n o dens m CD0 D P A B C E F G nSeries nParallel Eb Rt capacity Rbat b c e nMotors...
+    Kv indDec indDecTurn indDecClimb paraDec indParaDecTO wheelDecTO CLrate tInit CLinit Vallow throttleChange interval
+
+%% Aircraft parameters
+throttleChange = 0.5; % [-] change throttle by this amount to stabilize speed
+
+if missionNo == 2
+    m = plane.m2;
+    CD0 = plane.CD02;
+    
+    % Propeller
+    D = plane.D2;
+    P = plane.P2;
+
+    % Ct coefficients
+    A = plane.A2;
+    B = plane.B2;
+    C = plane.C2;
+
+    % Cp coefficients
+    E = plane.E2;
+    F = plane.F2;
+    G = plane.G2;
+    
+    % Battery
+    nSeries = plane.nSeries2;
+    nParallel = plane.nParallel2;
+    Eb = plane.Eb2;   
+    Rt = plane.Rt2;
+    capacity = plane.bat2capacity;
+    Rbat = plane.bat2R;
+
+    % Flight Parameters
+    Vallow = plane.Vmax2; % [m/s], defined in definePlane.m
+    
+elseif missionNo == 3
+    m = plane.m3;
+    CD0 = plane.CD03;
+    
+    % Propeller
+    D = plane.D3;
+    P = plane.P3;
+
+    % Ct coefficients
+    A = plane.A3;
+    B = plane.B3;
+    C = plane.C3;
+
+    % Cp coefficients
+    E = plane.E3;
+    F = plane.F3;
+    G = plane.G3;
+    
+    % Battery
+    nSeries = plane.nSeries3;
+    nParallel = plane.nParallel3;
+    Eb = plane.Eb3;
+    Rt = plane.Rt3;
+    capacity = plane.bat3capacity;
+    Rbat = plane.bat3R;
+
+    % Flight Parameters
+    Vallow = plane.Vmax3; % [m/s] defined in definePlane.m
+end
+
+b = plane.b;
+c = plane.c;
+e = plane.e;
+
+CLmax = plane.CLmax;
+
+rr = plane.rr;
+CLgroundRoll = plane.CLgroundRoll;
+hWing = plane.hWing;
+pitchRate = .4;
+
+% Motor
+Kv = plane.Kv;
+nMotors = plane.nMotors;
+
+% Battery decay model constants
+u = 3.5;
+v = -0.0334;
+w = -0.106;
+z = 0.7399;
+n = 1.403;
+o = 2;
+
+%% Environment parameters
+windDirection = environment.windDirection;
+windSpeed = environment.windSpeed;
+runwayDirectionUpwind = environment.runwayDirectionUpwind;
+dens = environment.dens;
+
+%% Standard equations
+%S = plane.S;
+W = m*9.81;
+AR = plane.AR;
+S = (plane.b-plane.wFuse)*plane.c;
+k = 1/(pi*e*AR);
+theta = windDirection-runwayDirectionUpwind;
+gfx = ((16*hWing/b)^2)/(1+((16*hWing/b)^2));
+CLrate = pitchRate*2*pi/(1 + 2*pi*k);
+Vstall = sqrt((2*W)/(CLmax*dens*S)); % for level flight. Multiply by sqrt(load factor) for accelerated flight
+segmentResults.Vstall = Vstall;
+
+%% Forces on the aircraft in motion
+% All forces can be split into component parts - for instance, the
+% aircraft's induced drag and parasite drag in cruise.  We can rearrange Newton's 2nd
+% law of motion, F = m*a, as a = F/m.  Since the aircraft, of constant
+% mass, is the only object being acted upon by these forces, we can
+% likewise split the aircraft's various accelerating forces (although all these 
+% are decelerating) into their component parts, as follows.
+
+% Component of aircraft deceleration due to induced drag in cruise ...
+indDec = ((2*k*(W^2))/(dens*S))/m;
+% ... in turns
+indDecTurn = dens*S*k/(2*m);
+% ... in climbs
+indDecClimb = dens*S*k*(CL.^2)/(2*m);
+% ... due to parasite drag
+paraDec = dens*S*CD0/(2*m);
+% ... due to induced and parasite drag on takeoff
+indParaDecTO = ( dens*S* ( CD0 + (k*gfx*(CLgroundRoll^2)) - (rr*CLgroundRoll ) ) )/(2*m);
+% ... due to rolling resistance of the wheels on takeoff
+wheelDecTO = rr*W/m; % = rr*9.81
+
+%% Initial values
+try tInit = performanceElapsed.t(end); catch, tInit = 0; end
+try Vinit = performanceElapsed.V(end); catch, Vinit = 0; end
+try sInit = performanceElapsed.s(end); catch, sInit = 1; end
+try throtInit = performanceElapsed.throttle(end); catch, throtInit = 0.5; end
+try checkStall = performanceElapsed.stall(end); catch, checkStall = false; end
+
+%% Differential equation solver parameters
+tmax = 50;
+interval = 0.1;
+tspan = tInit+interval:interval:tInit+tmax;
+%% TAKEOFF
+if strcmp(courseSegment, 'takeoff')
+    % Takeoff speed & headwind
+    VTO = 1.2*Vstall;
+    segmentResults.VTO = VTO;
+    headwind = windSpeed*cos(theta);
+
+    % Simulate takeoff
+    [t,p] = ode45(@TOEquation,0:0.01:10,[sInit,headwind,throtInit],[],throttle, throtInit);
+    s = p(:,1);
+    V = p(:,2);
+    throt = p(:,3);
+
+    % Eliminate nonreal portions and trim to desired takeoff speed
+    V = V(V < VTO);
+%     V = real(V);
+%     V = V(V == real(V));
+    t = t(1:length(V));
+    s = s(1:length(V));
+    throt = throt(1:length(V));
+    drift = 0;
+
+    if any(imag(V))
+        segmentResults.TOFL = 
+    % Distance as a function of t up to takeoff speed
+    x = cumsum(median(diff(t))*(V(1:end)-headwind));
+   
+    % Takeoff field length in FEET
+    segmentResults.TOFL = x(end);
+    
+%% CLIMB
+elseif strcmp(courseSegment, 'climb')
+    % Define desired cruise altitude
+    cruiseAlt = 10;
+    
+    % Simulate turning flight (reduced throttle and fixed CL near max)
+    [t,p] = ode45(@climbEquation,tspan,[sInit,Vinit], [], throttle);
+    s = p(:,1);
+    V = p(:,2);
+
+    % Eliminate nonreal portions
+    V = V(V == real(V));
+    t = t(1:length(V));
+    s = s(1:length(V));
+
+    % Get drag vector
+    drag = indDecClimb*(V.^2) + paraDec*(V.^2);
+    
+    % Get thrust vector
+    [T, ~] = calcPropulsion(s, V, throttle);
+    thrust = nMotors*T;
+    
+    % Get vertical speed (rate of climb) vector 
+    Vy = ((thrust - drag).*V)/W;
+    
+    % Get altitude vector
+    y = cumsum(Vy)*interval;
+    
+    % Trim to desired distance
+    y = y(y < cruiseAlt);
+    t = t(1:length(y));
+    V = V(1:length(y));
+    s = s(1:length(y));
+    drift = 0;
+
+    if sum(V < Vstall) > 0
+        checkStall = true;
+    end
+
+%% STRAIGHTAWAY
+elseif strcmp(courseSegment, 'halfStraightaway')
+    % Standard DBF 500 ft (153 m) half-straightaway length
+    flightSegmentDist = (1000 / 3.281) * 1.1 / 2; % half of the 1000 ft straightaway (in m), with a fudge factor of flying an extra 10%
+        
+    % Simulate cruise flight
+    [t,p] = ode45(@cruiseEquation,tspan,[sInit,Vinit,throtInit],[],throttle);
+    s = p(:,1);
+    V = p(:,2);
+    throt = p(:,3);
+
+    % Eliminate nonreal portions
+    V = V(V == real(V));
+    t = t(1:length(V));
+    s = s(1:length(V));
+    throt = throt(1:length(V));
+    
+    % Adjust wind angle (theta) by 180 degrees if downwind
+    if ~upwind
+        theta = theta - pi;
+    end
+
+    % Calculate groundspeed
+    Vg = ((windSpeed^2) + (V.^2) - (2*windSpeed*V*cos((2*pi)-theta))).^.5;
+
+    % Calculated distance
+    x = cumsum(Vg)*interval; % works since all dt are constant
+    
+    % Trim to segment length
+    x = x(x < (flightSegmentDist + additionalDist));
+    t = t(1:length(x));
+    V = V(1:length(x));
+    s = s(1:length(x));
+    throt = throt(1:length(x));
+    drift = 0;
+
+    if sum(V < Vstall) > 0
+        checkStall = true;
+    end
+
+%% DECELERATION
+elseif strcmp(courseSegment, 'deceleration')
+    % Simulate decelerating cruise flight
+    [t,p] = ode45(@decelEquation,tspan,[sInit,Vinit],[],throttle);
+    s = p(:,1);
+    V = p(:,2);
+
+    % Eliminate nonreal portions
+    V = V(V == real(V));
+    t = t(1:length(V));
+    s = s(1:length(V));
+    
+    % Adjust wind angle (theta) by 180 degrees if downwind
+    if ~upwind
+        theta = theta - pi;
+    end
+
+    % Calculate groundspeed
+    Vg = ((windSpeed^2) + (V.^2) - (2*windSpeed*V*cos((2*pi)-theta))).^.5;
+
+    % Calculated distance
+    x = cumsum(Vg)*interval;
+    
+    % Calculate landing speed (same as TO speed)
+    Vland = 1.2*Vstall;
+    
+    % Trim to segment length - segment ends when wing approaches stall
+    x = x(V > Vland);
+    t = t(1:length(x));
+    V = V(1:length(x));
+    s = s(1:length(x));
+    drift = -x(end);
+
+    if sum(V < Vstall) > 0
+        checkStall = true;
+    end
+    
+%% STOPPING
+elseif strcmp(courseSegment, 'stopping')
+    % Simulate braking on the ground
+    t = transpose(tInit+interval:interval:tInit+10);
+    V = Vinit - 1.1*9.81*(t-tInit);
+    
+    x = cumsum(V)*interval;
+    
+    % Trim to segment length - segment ends when groundspeed is 0
+    x = x(V > 0);
+    t = t(1:length(x));
+    V = V(1:length(x));
+    s = sInit*ones(size(x));
+    drift = 0;
+    
+%% TAXI & DEPLOY
+elseif strcmp(courseSegment, 'taxideploy')    
+    % Trim to segment length - segment ends when groundspeed is 0
+    t = transpose(tInit+.1:.1:tInit+5.1);
+    V = [ones(25,1)*2.5; zeros(26,1)];
+    s = ones(length(t),1)*sInit;
+    drift = 0;
+
+%% MAXIMUM-LIFT TURN
+else
+    if strcmp(courseSegment, 'turn180')
+        % Standard DBF 180-degree turn at each end of the course
+        flightSegmentTurnAngle = pi;
+    else
+        % Standard DBF 360-degree turn at the midpoint of downwind
+        % straightaway
+        flightSegmentTurnAngle = 2*pi;
+    end
+    
+    % Calculate initial lift coefficient based on initial airspeed
+    CLinit = 2*W/(dens*(Vinit^2)*S);
+    
+    % Simulate turning flight (reduced throttle and fixed CL near max)
+    [t,p] = ode45(@turnEquation,tspan,[sInit,Vinit, throtInit],[],throttle,CL);
+    s = p(:,1);
+    V = p(:,2);
+
+    % Eliminate nonreal portions
+    V = V(V == real(V));
+    t = t(1:length(V));
+    s = s(1:length(V));
+    
+    % Get CL vector
+    CLTurn = transpose(min([CLrate*(transpose(t)-tInit)+CLinit; CL*ones(1,length(V))]));
+
+    % Get lift vector
+    L = 0.5*dens*(V.^2)*S.*CLTurn;
+
+    % Get load factor vector
+    loadFactor = L/W;
+
+    % Get r vector
+    r = (m.*V.^2)./sqrt(L.^2-W.^2);
+
+    % Get runway-relative bearing vector
+    bearing = cumsum((V*interval)./r);
+
+    % Trim to desired turn angle
+    bearing = bearing(bearing < flightSegmentTurnAngle);
+    loadFactor = loadFactor(1:length(bearing));
+    CLTurn = CLTurn(1:length(bearing));
+    t = t(1:length(bearing));
+    V = V(1:length(bearing));
+    s = s(1:length(bearing));
+    VstallTime = sqrt(loadFactor).*Vstall.*ones(size(bearing));
+    r = r(1:length(bearing));
+
+%     if sum(V < loadFactor*Vstall) > 0
+%         checkStall = true;
+%     end
+
+    % Calculate wind drift and return as additional distance for next
+    % straightaway
+    drift = windSpeed*(t(end)-tInit);
+end
+
+% Add wind drift during turns to results
+segmentResults.additionalDistance = drift;
+
+%% Lap Segment Markers
+% Segment
+segmentResults.coursePoints.segments = [pointsElapsed.segments; convertCharsToStrings(courseSegment)];
+% Time
+segmentResults.coursePoints.startTimes = [pointsElapsed.startTimes; tInit];
+
+%% Time-Dependent Performance Stats
+notCruiseFlight = max(strcmp(courseSegment, ["takeoff", "taxideploy", "stopping", "climb", "deceleration", "turn360", "turn180"]));
+levelFlight = max(strcmp(courseSegment, "halfStraightaway"));
+turnFlight = max(strcmp(courseSegment, ["turn360", "turn180"]));
+
+% STALL (checking if it stalled, boolean)
+try segmentResults.performance.stall = [performanceElapsed.stall; checkStall]; % [bool]
+catch, segmentResults.performance.stall = checkStall; end
+
+% STALL SPEED
+if ~turnFlight
+    VstallTime = Vstall * ones(size(t));
+end
+try segmentResults.performance.Vstall = [performanceElapsed.Vstall; VstallTime]; % [m/s]
+catch, segmentResults.performance.Vstall = VstallTime; end
+
+% TIME VECTOR
+try segmentResults.performance.t = [performanceElapsed.t; t]; % [s]
+catch, segmentResults.performance.t = t; end
+
+% Velocity
+try segmentResults.performance.V = [performanceElapsed.V; V]; % [m/s]
+catch, segmentResults.performance.V = V; end
+
+% Battery state of charge (SoC)
+try segmentResults.performance.s = [performanceElapsed.s; s]; % [-]
+catch, segmentResults.performance.s = s; end
+
+% Lift Coefficient
+if notCruiseFlight
+    CL = ones(length(V),1).*CL; % [-] JTS CL is both calculated and assumed?
+elseif levelFlight
+    CL = 2*W./(dens*(V.^2)*S); % [-]
+end
+try segmentResults.performance.CL = [performanceElapsed.CL; CL];
+catch, segmentResults.performance.CL = CL; end
+
+% Load factor
+if ~max(strcmp(courseSegment, ["turn180", "turn360"]))
+    loadFactor = ones(length(V),1); % [-]
+end
+try segmentResults.performance.loadFactor = [performanceElapsed.loadFactor; loadFactor];
+catch, segmentResults.performance.loadFactor = loadFactor; end
+
+% Induced drag power
+if throttle == 0
+    Pinduced = zeros(size(s));
+else
+    Pinduced = .5*dens*(V.^3).*(loadFactor.^2)*k.*(CL.^2)*S; % [W]
+end
+try segmentResults.performance.Pinduced = [performanceElapsed.Pinduced; Pinduced];
+catch, segmentResults.performance.Pinduced = Pinduced; end
+
+% Parasite drag power
+if throttle == 0
+    Pparasite = zeros(size(s));
+else
+    Pparasite = .5*dens*(V.^3)*CD0*S; % [W]
+end
+try segmentResults.performance.Pparasite = [performanceElapsed.Pparasite; Pparasite];
+catch, segmentResults.performance.Pparasite = Pparasite; end
+
+[thrust, Pelectric, Vb, propspeed, N, J, Ct, Cp, Pshaft, proptorque, I] = calcPropulsion(s, V, throttle);
+
+% Open-circuit voltage
+try segmentResults.performance.Vb = [performanceElapsed.Vb; Vb];
+catch, segmentResults.performance.Vb = Vb; end
+
+% Prop speed (omega)
+try segmentResults.performance.propspeed = [performanceElapsed.propspeed; propspeed];
+catch, segmentResults.performance.propspeed = propspeed; end
+
+% Rotations Per Second
+try segmentResults.performance.N = [performanceElapsed.N; N];
+catch, segmentResults.performance.N = N; end
+
+% Advance ratio
+try segmentResults.performance.J = [performanceElapsed.J; J];
+catch, segmentResults.performance.J = J; end
+
+% Coefficient of Thrust
+try segmentResults.performance.Ct = [performanceElapsed.Ct; Ct];
+catch, segmentResults.performance.CT = Ct; end
+
+% Thrust
+try segmentResults.performance.thrust = [performanceElapsed.thrust; thrust];
+catch, segmentResults.performance.thrust = thrust; end
+
+% Propeller Coefficient
+try segmentResults.performance.Cp = [performanceElapsed.Cp; Cp];
+catch, segmentResults.performance.Cp = Cp; end
+
+% Shaft power (total)
+try segmentResults.performance.Pshaft = [performanceElapsed.Pshaft; Pshaft];
+catch, segmentResults.performance.Pshaft = Pshaft; end
+
+% Torque
+try segmentResults.performance.proptorque = [performanceElapsed.proptorque; proptorque];
+catch, segmentResults.performance.proptorque = proptorque; end
+
+% Current
+try segmentResults.performance.I = [performanceElapsed.I; I];
+catch, segmentResults.performance.I = I; end
+
+% Electrical power
+try segmentResults.performance.Pelectric = [performanceElapsed.Pelectric; Pelectric];
+catch, segmentResults.performance.Pelectric = Pelectric; end
+
+% Battery load (C-rate)
+cRate = I./capacity;
+try segmentResults.performance.cRate = [performanceElapsed.cRate; cRate];
+catch, segmentResults.performance.cRate = cRate; end
+
+% Aircraft power
+Paircraft = thrust.*V; % [W]
+try segmentResults.performance.Paircraft = [performanceElapsed.Paircraft; Paircraft];
+catch, segmentResults.performance.Paircraft = Paircraft; end
+
+% Under-load voltage
+VbUnderLoad = Vb - (I*Rbat);
+try segmentResults.performance.VbUnderLoad = [performanceElapsed.VbUnderLoad; VbUnderLoad];
+catch, segmentResults.performance.VbUnderLoad = VbUnderLoad; end
+
+% Motor efficiency (η_motor)
+etaMotor = Pshaft./Pelectric; % [-]
+try segmentResults.performance.etaMotor = [performanceElapsed.etaMotor; etaMotor];
+catch, segmentResults.performance.etaMotor = etaMotor; end
+
+% Propeller efficiency (η_prop)
+etaProp = Paircraft./Pshaft; % [-]
+try segmentResults.performance.etaProp = [performanceElapsed.etaProp; etaProp];
+catch, segmentResults.performance.etaProp = etaProp; end
+
+% Overall propulsive efficiency (η)
+eta = etaMotor.*etaProp; % [-]
+try segmentResults.performance.eta = [performanceElapsed.eta; eta];
+catch, segmentResults.performance.eta = eta; end
+
+% Throttle
+if ~max(strcmp(courseSegment, ["halfStraightaway", "takeoff"]))
+    throt = throttle * ones(size(t));
+end
+try segmentResults.performance.throttle = [performanceElapsed.throttle; throt];
+catch, segmentResults.performance.throttle = throt; end
+
+% Radius of turn
+if ~max(strcmp(courseSegment, ["turn180", "turn360"]))
+    r = zeros(size(t));
+end
+try segmentResults.performance.r = [performanceElapsed.r; r];
+catch, segmentResults.performance.r = r; end
+
+end
+
+%% Declare differential equations
+
+% Cruise system of differential equations
+function dpdt = cruiseEquation(t,p,throttle)
+    global indDec paraDec nMotors m Eb throttleChange Vallow interval
+
+    s = p(1);
+    V = p(2);
+    throt = p(3);
+    
+    if V > 1.05*Vallow % if speed is greater than allowable speed
+        if throt > interval*throttleChange % ensure throttle is never negative
+            dthrotdt = -throttleChange; % decrease throttle
+        else
+            dthrotdt = 0;
+        end
+    elseif V < 0.95*Vallow % if speed is less than allowable speed
+        if throt < (throttle-interval*throttleChange) % ensure throttle wont exceed max given throttle
+            dthrotdt = throttleChange; % increase throttle
+        else
+            dthrotdt = 0;
+        end
+    else
+        dthrotdt = 0;
+    end
+
+    [T, Pel] = calcPropulsion(s, V, throt);
+
+    dsdt = (1/Eb) * -Pel;
+    dVdt = -indDec/(V^2) - paraDec*(V^2) + (nMotors/m)*T;
+    dpdt = [dsdt; dVdt; dthrotdt];
+end
+
+% Turn system of differential equations
+function dpdt = turnEquation(t,p,throttle,CL)
+    global indDecTurn paraDec nMotors m Eb CLrate tInit CLinit Vallow interval throttleChange
+    s = p(1);
+    V = p(2);
+    throt = p(3);
+
+    if V > 1.05*Vallow % if speed is greater than allowable speed
+        if throt > interval*throttleChange % ensure throttle is never negative
+            dthrotdt = -throttleChange; % decrease throttle
+        else
+            dthrotdt = 0;
+        end
+    elseif V < 0.95*Vallow % if speed is less than allowable speed
+        if throt < (throttle-interval*throttleChange) % ensure throttle wont exceed max given throttle
+            dthrotdt = throttleChange; % increase throttle
+        else
+            dthrotdt = 0;
+        end
+    else
+        dthrotdt = 0;
+    end
+
+    [T, Pel] = calcPropulsion(s, V, throt);
+
+    dsdt = (1/Eb) * -Pel;
+    dVdt = -(indDecTurn*min([(CLrate*(t-tInit)+CLinit)^2 CL^2]))*(V^2) - paraDec*(V^2) + (nMotors/m)*T;
+    dpdt = [dsdt; dVdt; dthrotdt];
+end
+
+% Takeoff system of differential equations
+function dpdt = TOEquation(t,p,throttle, throtInit)
+    global indParaDecTO wheelDecTO nMotors m Eb D P
+    s = p(1);
+    V = p(2);
+    throt = p(3);
+    
+    if (D/P) >= 1.3
+        rampTime = 1;
+    else
+        rampTime = 1.5;
+    end
+    
+    if t <= rampTime
+        dthrotdt = (throttle - throtInit)/rampTime;
+    elseif t > rampTime
+        dthrotdt = 0;
+    end
+
+    [T, Pel] = calcPropulsion(s, V, throt);
+     
+    if V > 0
+        dVdt = -indParaDecTO*(V^2) - wheelDecTO + (nMotors/m)*T;
+    else
+        dVdt = -indParaDecTO*(V^2) + (nMotors/m)*T;
+    end
+
+    dsdt = (1/Eb) * -Pel;
+    dpdt = [dsdt; dVdt; dthrotdt];
+
+end
+
+% Climb system of differential equations
+function dpdt = climbEquation(t,p,throttle)
+    global indDecClimb paraDec nMotors m Eb
+    s = p(1);
+    V = p(2);
+    [T, Pel] = calcPropulsion(s, V, throttle);
+    dsdt = (1/Eb) * -Pel;
+    dVdt = -indDecClimb*(V^2) - paraDec*(V^2) + (nMotors/m)*T;
+    dpdt = [dsdt; dVdt];
+end
+
+
+% Deceleration system of differential equations
+function dpdt = decelEquation(t,p)
+    global indDec paraDec
+    V = p(2);
+    dsdt = 0;
+    dVdt = -indDec/(V^2) - paraDec*(V^2);
+    dpdt = [dsdt; dVdt];
+end
+
+%% Calculating thrust
+function [thrust, Pelectric, Vb, propspeed, N, J, Ct, Cp, Pshaft, proptorque, I] = calcPropulsion(s, V, throttle)
+    global u v w z n o dens D A B C E F G nSeries Rt Kv nMotors
+    
+    % Fudge Factors
+    CPf = 1;
+    CTf = 1;
+
+    % Battery voltage
+    Vb = nSeries*(u + v*(-log(s)).^n + w*s + z*exp(o*(s-1))); % [V]
+    
+    if throttle == 0
+        propspeed = zeros(size(s)); % [W]
+        N = zeros(size(s)); % [rot/s]
+        J = zeros(size(s)); % [-]
+        Ct = zeros(size(s)); % [-]
+        thrust = zeros(size(s)); % [N]
+        Cp = zeros(size(s)); % [-]
+        Pshaft = zeros(size(s)); % [W]
+        proptorque = zeros(size(s)); % [N*m]
+        I = zeros(size(s)); % [A]
+        Pelectric = zeros(size(s)); % [W]
+    else
+        % Prop speed
+        Ca = CPf*(G*dens*(D^5))/(8*(pi^3));
+        Cb = CPf*((F*dens*V*(D^4))/(4*(pi^2))) + (1/((Kv^2)*Rt));
+        Cc = CPf.*((E.*dens.*(V.^2)*(D.^3))./(2.*pi)) - ((throttle.*Vb)./(Kv.*Rt));
+
+        propspeed = (-Cb+(((Cb.^2)-(4.*Ca.*Cc)).^(1/2)))./(2.*Ca); % [rad/s]
+        N = propspeed/(2*pi); % [rot/s]
+
+        % Advance Ratio
+        J = V./(N.*D); % [-]
+
+        % Thrust
+        Ct = CTf.*(A.*J.^2 + B.*J + C); % [-]
+        thrust = Ct.*dens.*(N.^2).*(D.^4); % [N]
+    
+        % Shaft Power
+        Cp = CPf.*((E.*(J.^2)) + (F.*J) + G); % [-]
+        Pshaft = nMotors.*Cp.*dens.*(N.^3).*(D.^5); % [W]
+    
+        % Torque
+        proptorque = Pshaft./(N.*nMotors); % [N*m] JTS for one or all motors?
+
+        % Current
+        I = Kv*proptorque*nMotors/(2*pi); % [A]
+
+        % Electric Power
+        Pelectric = I.*Vb.*throttle; % [W]
+    end   
+    
+end

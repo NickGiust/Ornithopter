@@ -1,0 +1,61 @@
+global omega T Pel CTf CPf
+
+%% Propeller angular velocity/prop. speed [omega]
+% Propeller constants
+syms D A B C E F G
+% Air density
+syms rho
+% Pi is set as a variable to prevent MATLAB from combining it into terrible
+% constants
+syms PI
+% Motor & resistance characteristics
+syms Kv Rt 
+% Throttle setting
+syms thr
+% Battery constants based on https://www.mdpi.com/1996-1073/9/11/900,
+% "A Generalized SOC-OCV Model for Lithium-Ion Batteries and the SOC Estimation for LNMCO Battery"
+syms a b c d n o nSeries;
+% Airspeed
+syms V
+% Battery state of charge (0 = dead, 1 = fully charged)
+syms s
+
+% Battery voltage decay model
+Vb = nSeries*(a + b*(-log(s))^n + c*s + d*exp(o*(s-1)));
+
+% Coefficients to solve for propeller speed with quadratic formula after
+% setting motor torque equal to propeller torque
+Ca = CPf*(G*rho*(D^5))/(8*(PI^3));
+Cb = CPf*((F*rho*V*(D^4))/(4*(PI^2))) + (1/((Kv^2)*Rt));
+Cc = CPf*((E*rho*(V^2)*(D^3))/(2*PI)) - ((thr*Vb)/(Kv*Rt));
+
+omega = (-Cb+(((Cb^2)-(4*Ca*Cc))^(1/2)))/(2*Ca); % [rad/s]
+N = omega/(2*PI); % [rot/s]
+
+%% Advance ratio [J]
+J = (2*PI*V)/(omega*D);
+J = V/(N*D);
+
+%% Propeller dynamic thrust [T]
+%T = CTf*((A*rho*(V^2)*(D^2)) + ((B*rho*V*(D^3))/(2*PI))*omega ...
+%    + ((C*rho*(D^4))/(4*(PI^2)))*(omega^2));
+
+% Math 
+% T = CTf * dens * (p(2)^2) * (D^2) * (A + (B/J) + (C/(J^2)))
+% T = CTf * dens * (p(2)^2) * (D^2) * (A*J^2 + B*J + C)/(J^2)
+% T = CTf * dens * (p(2)^2) * (D^2) * (A*J^2 + B*J + C)/(((2*pi*p(2))/(omega*D))^2)
+% T = CTf * dens * (p(2)^2) * (D^2) * (A*J^2 + B*J + C)*(omega^2*D^2)/(4 * pi^2 * p(2)^2)
+CT = CTf * (A*J^2 + B*J + C);
+T =  CT * rho * N^2 * (D^4); % [N]
+%% Electrical power [Pel]
+
+Cp = CPf*((E*(J^2)) + (F*J) + G);
+
+Ps = Cp*(N^3)*rho*(D^5);
+
+Pel = Vb*thr*Ps*Kv/omega;
+
+%% Convert to MATLAB functions
+T = matlabFunction(T);
+omega = matlabFunction(omega);
+Pel = matlabFunction(Pel);

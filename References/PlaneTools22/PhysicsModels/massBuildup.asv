@@ -1,0 +1,102 @@
+function massResults = massBuildup(plane, mission)
+
+addpath([planeToolsDirectory '\PhysicsModels\']);
+addpath([planeToolsDirectory '\ComponentLibrary']);
+addpath([planeToolsDirectory '\Plotting']);
+addpath([planeToolsDirectory '\Environments']);
+
+%% PARAMETERS
+% Fuselage
+lFuse = plane.lFuse;
+wFuse = plane.wFuse;
+hFuse = plane.hFuse;
+
+load('material.mat', plane.fuseMat);
+fuseMaterial = eval(plane.fuseMat);
+adFuse = fuseMaterial.density;
+
+Afuse = 2*(lFuse*wFuse)+1.5*(lFuse*hFuse);
+mFuse = adFuse*Afuse;
+
+% Wings (Foam Core)
+b = plane.b;
+c = plane.c;
+load('material.mat', plane.wingMat);
+wingMaterial = eval(plane.wingMat);
+adWing = wingMaterial.density; % area density?
+
+Awing = 2.2*b*c;
+mWings = adWing*Awing;
+
+% winglets have root chord of the wing chord, and tip chord 1/2 root chord
+% estimate mass using same area density as wing
+AWinglet = 2.2*plane.hWinglet*(0.5 * (c + 0.5*c));
+mWinglets = 2 * adWing*AWinglet; % multiply by 2 to account for both sides
+
+
+% Wings (Built-up)
+
+
+
+% Tail
+cTail = plane.cTail;
+bTail = plane.bTail;
+hTail = plane.hTail;
+
+load('material.mat', plane.tailMat);
+tailMaterial = eval(plane.tailMat);
+adTail = tailMaterial.density;
+
+Atail = 2.2*cTail*(bTail+hTail);
+mTail = adTail*Atail;
+
+% Motor
+load('motor.mat', plane.motorType);
+motor = eval(plane.motorType);
+mMotor = motor.m;
+
+% Battery
+if mission == 2
+    load('battery.mat', plane.batteryType2);
+    battery = eval(plane.batteryType2);
+    mBat = battery.mPerCell*plane.nSeries2*plane.nParallel2;
+elseif mission == 3
+    load('battery.mat', plane.batteryType3);
+    battery = eval(plane.batteryType3);
+    mBat = battery.mPerCell*plane.nSeries3*plane.nParallel3;
+end
+
+% Landing gear
+lgType = plane.lgType;
+hWing = plane.hWing;
+
+if strcmp(lgType, 'strut')
+    Alg = (hWing^3)*(.15^2);
+end
+
+if strcmp(lgType, 'bow')
+    Alg = hWing*.2*3.5;
+end
+
+load('material.mat', plane.lgMat);
+lgMaterial = eval(plane.lgMat);
+daLg = lgMaterial.density;
+
+mLg = daLg*Alg;
+
+% Payloads
+if mission == 2
+    mPayloads = plane.mPayload2;
+elseif mission == 3
+    mPayloads = plane.lengthPayload3 * 0.238106231; % 0.16 lbs/ft = 0.238106231 kg/m
+end
+
+%% Total
+m = [mFuse mWings mTail mBat mMotor mLg mPayloads mWinglets];
+
+%figure();
+%pie(m*100, ["Fuselage", "Wings", "Tail", "Battery", "Motors", "L.G.", "Payloads", ""]);
+
+massResults.m = sum(m);
+massResults.mShares = m/massResults.m;
+end

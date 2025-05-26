@@ -1,0 +1,71 @@
+Wing
+=======================================================================
+Wingspan [m] :		.914
+Tip chord [m] :		.305
+Root chord [m] :	.305
+Max. thickness [m]:	.03
+Airfoil type:		e560
+Ground roll CL:		.3
+Winglet drag area [m^2]:0
+Winglet weight [kg]:	0
+Wing height [m]:	.23
+Max. load factor:	7		
+Material:		foam
+
+Fuselage
+=======================================================================
+Length [m]:		.9652	
+Width [m]:		.14
+Height [m]:		.17
+Material:		foam
+
+Tail
+=======================================================================
+Horizontal span [m]:	.43	
+Height [m]:		.19	
+Mean chord [m]:		.13
+No. of verticals:	1
+Material:		balsa
+
+Propulsion
+=======================================================================
+Motor type:		Hacker_A60_6XS_V4_28pole
+Number of Motors:	1
+ESC current rating [A]:	10000
+ESC resistance [Ω]:	.02
+Wire diameter [m]:	.006
+
+Landing gear
+=======================================================================
+Type:			bow
+Material:		steel
+Rolling resistance:	.07
+
+Mission 2
+=======================================================================
+- Propeller
+Propeller:		apce_17x12
+
+- Battery
+Battery:		Turnigy_LiPo_4500
+No. in series:		6
+No. in parallel:	1
+
+- Payload	
+Mass [kg]:		0
+Drag area [m^2]:	0
+No. of payloads:	0
+
+Mission 3
+=======================================================================
+Propeller:		apce_17x12
+
+- Battery
+Battery:		Turnigy_LiPo_4500
+No. in series:		6
+No. in parallel:	1
+
+- Payload	
+Mass [kg]:		.08
+Drag area [m^2]:	0
+No. of payloads:	18

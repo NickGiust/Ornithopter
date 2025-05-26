@@ -1,0 +1,71 @@
+Wing
+=======================================================================
+Wingspan [m] :		2.44
+Tip chord [m] :		.305
+Root chord [m] :	.305
+Max. thickness [m]:	.03
+Airfoil type:		e560
+Ground roll CL:		.3
+Winglet height [m]:0
+Winglet weight [kg]:	0
+Wing height [m]:	.23
+Max. load factor:	12
+Material:		carbon
+
+Fuselage
+=======================================================================
+Length [m]:		1.4	
+Width [m]:		.14
+Height [m]:		.14
+Material:		carbon
+
+Tail
+=======================================================================
+Horizontal span [m]:	.6	
+Height [m]:		.26	
+Mean chord [m]:		.2
+No. of verticals:	1
+Material:		carbon
+
+Propulsion
+=======================================================================
+Motor type:		Hacker_A50_10L_Turnado_V3
+Number of Motors:	1
+ESC current rating [A]:	10000
+ESC resistance [Ω]:	.02
+Wire diameter [m]:	.006
+
+Landing gear
+=======================================================================
+Type:			bow
+Material:		carbon
+Rolling resistance:	.03
+
+Mission 2
+=======================================================================
+- Propeller
+Propeller:		apce_17x12
+
+- Battery
+Battery:		Turnigy_LiPo_4500
+No. in series:		6
+No. in parallel:	1
+
+- Payload	
+Mass [kg]:		.019
+Drag area [m^2]:	0
+No. of payloads:	120
+
+Mission 3
+=======================================================================
+Propeller:		apce_17x12
+
+- Battery
+Battery:		Turnigy_LiPo_4500
+No. in series:		6
+No. in parallel:	1
+
+- Payload	
+Mass [kg]:		.23
+Drag area [m^2]:	0
+No. of payloads:	12
